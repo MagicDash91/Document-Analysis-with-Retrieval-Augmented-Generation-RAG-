@@ -5,4 +5,4 @@ langchain
 langchain_community
 langchain_google_genai
 faiss-cpu
-PyMuPDF==1.16.14
+PyMuPDF==1.24.7
