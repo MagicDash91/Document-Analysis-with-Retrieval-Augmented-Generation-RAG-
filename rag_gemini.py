@@ -7,19 +7,17 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.document_loaders import (
     UnstructuredCSVLoader, UnstructuredExcelLoader,
-    Docx2txtLoader, UnstructuredPowerPointLoader
+    Docx2txtLoader, UnstructuredPowerPointLoader, Docx2txtLoader
 )
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 
-
-
 # Set Google API Key
 os.environ["GOOGLE_API_KEY"] = "AIzaSyCFI6cTqFdS-mpZBfi7kxwygewtnuF7PfA"
 
 # Title of the app
-st.title("Document Analysis with Retrieval-Augmented Generation (RAG)")
+st.title("Document Analysis with Retrieval-Augmented Generation (RAG) and Zero-Shot")
 
 # Upload the file
 uploaded_file = st.file_uploader("Upload Document:")
@@ -110,21 +108,40 @@ async def process_file():
         st.write(retrieved_texts)
 
         # Augment the LLM response with retrieved documents using RAG
-        template = """
+        rag_template = """
         Based on the following retrieved context:
         "{retrieved_texts}"
         
         Answer the question: {question}
         
         Answer:"""
-        prompt = PromptTemplate(input_variables=["retrieved_texts", "question"], template=template)
-        llm_chain = LLMChain(llm=llm, prompt=prompt)
+        rag_prompt = PromptTemplate(input_variables=["retrieved_texts", "question"], template=rag_template)
+        rag_llm_chain = LLMChain(llm=llm, prompt=rag_prompt)
 
-        response = llm_chain.run(retrieved_texts=retrieved_texts, question=question)
+        rag_response = rag_llm_chain.run(retrieved_texts=retrieved_texts, question=question)
 
-        # Display the LLM response
-        st.markdown("### Augmented Response from the LLM")
-        st.write(response)
+        # Display the LLM response from RAG
+        st.markdown("### Augmented Response from the LLM (RAG)")
+        st.write(rag_response)
+
+        # Now, handle zero-shot capability by querying the LLM directly without any retrieved documents
+        zeroshot_template = """
+        Classify this document into one of these categories: "financial report", "scientific paper", "news article", "legal document", or  "Other"
+
+        Document: "{all_text}"
+
+        Category:
+        Short Reason why it fit into that category:
+        """
+        zeroshot_prompt = PromptTemplate(input_variables=["all_text"], template=zeroshot_template)
+        zeroshot_llm_chain = LLMChain(llm=llm, prompt=zeroshot_prompt)
+
+        # Make sure to pass `all_text` to the run function
+        zeroshot_response = zeroshot_llm_chain.run(all_text=all_text)
+
+        # Display the zero-shot response
+        st.markdown("### Zero-Shot Response from the LLM")
+        st.write(zeroshot_response)
 
         # Clean up the temporary file
         os.remove(file_path)
