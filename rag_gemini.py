@@ -5,10 +5,6 @@ import fitz  # PyMuPDF
 from nltk import word_tokenize
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain_community.document_loaders import (
-    UnstructuredCSVLoader, UnstructuredExcelLoader,
-    Docx2txtLoader, UnstructuredPowerPointLoader, Docx2txtLoader
-)
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
@@ -17,10 +13,10 @@ from langchain.text_splitter import CharacterTextSplitter
 os.environ["GOOGLE_API_KEY"] = "AIzaSyCFI6cTqFdS-mpZBfi7kxwygewtnuF7PfA"
 
 # Title of the app
-st.title("Document Analysis with Retrieval-Augmented Generation (RAG) and Zero-Shot")
+st.title("PDF Document Analysis with Retrieval-Augmented Generation (RAG) and Zero-Shot")
 
-# Upload the file
-uploaded_file = st.file_uploader("Upload Document:")
+# Upload the file (restrict to PDF)
+uploaded_file = st.file_uploader("Upload PDF Document:", type=["pdf"])
 question = st.text_input("Insert Question", "Put your question here about the document")
 
 def extract_text_with_pymupdf(file_path):
@@ -33,8 +29,8 @@ def extract_text_with_pymupdf(file_path):
 
 async def process_file():
     if uploaded_file and question:
-        # Save the uploaded file with appropriate extension
-        file_path = f"file.{uploaded_file.name.split('.')[-1]}"
+        # Save the uploaded file as a PDF
+        file_path = f"file.pdf"
         
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
@@ -44,36 +40,8 @@ async def process_file():
         embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
         # Extract text using PyMuPDF
-        if file_path.endswith(".pdf"):
-            all_text = extract_text_with_pymupdf(file_path)
-        else:
-            # Load the document using existing loaders for other formats
-            def get_loader(file_path):
-                file_extension = os.path.splitext(file_path)[1].lower()
-                if file_extension == ".csv":
-                    return UnstructuredCSVLoader(file_path, mode="elements", encoding="utf8", errors="ignore")
-                elif file_extension == ".xlsx":
-                    return UnstructuredExcelLoader(file_path, mode="elements")
-                elif file_extension == ".docx":
-                    return Docx2txtLoader(file_path)
-                elif file_extension == ".pptx":
-                    return UnstructuredPowerPointLoader(file_path)
-                else:
-                    st.error("Unsupported file type")
-                    return None
-            
-            loader = get_loader(file_path)
-            
-            if not loader:
-                return
+        all_text = extract_text_with_pymupdf(file_path)
 
-            try:
-                docs = loader.load()
-                all_text = " ".join([doc.page_content for doc in docs])
-            except Exception as e:
-                st.error(f"Error loading file: {e}")
-                return
-        
         # Debug: Show the total length of the extracted text
         st.markdown(f"**<span style='font-size:16px;'>Total length of the extracted text: {len(all_text)} characters</span>**", unsafe_allow_html=True)
         
@@ -124,9 +92,50 @@ async def process_file():
         st.markdown("### Augmented Response from the LLM (RAG)")
         st.write(rag_response)
 
+
+
+        # Now, handle zero-shot capability by querying the LLM directly without any retrieved documents
+        point_template = """
+        Summarize the key points from the document in bullet form.
+
+        Document: "{all_text}"
+
+        Summary (use bullet points):
+        """
+        point_prompt = PromptTemplate(input_variables=["all_text"], template=point_template)
+        point_llm_chain = LLMChain(llm=llm, prompt=point_prompt)
+
+        # Make sure to pass `all_text` to the run function
+        point_response = point_llm_chain.run(all_text=all_text)
+
+        # Display the zero-shot response
+        st.markdown("### Key Points based on the Documents")
+        st.write(point_response)
+
+
+        # Now, handle zero-shot capability by querying the LLM directly without any retrieved documents
+        sentiment_template = """
+        List the positive, neagtive and neutral sentiment from the document in bullet form.
+
+        Document: "{all_text}"
+
+        Summary (use bullet points):
+        """
+        sentiment_prompt = PromptTemplate(input_variables=["all_text"], template=sentiment_template)
+        sentiment_llm_chain = LLMChain(llm=llm, prompt=sentiment_prompt)
+
+        # Make sure to pass `all_text` to the run function
+        sentiment_response = sentiment_llm_chain.run(all_text=all_text)
+
+        # Display the zero-shot response
+        st.markdown("### Sentiment Analysis based from the Documents")
+        st.write(sentiment_response)
+
+
+
         # Now, handle zero-shot capability by querying the LLM directly without any retrieved documents
         zeroshot_template = """
-        Classify this document into one of these categories: "financial report", "scientific paper", "news article", "legal document", or  "Other"
+        Classify this document into one of these categories: "Financial Report", "Scientific Paper", "News Article", "Legal Document", "Tutorial", "Documentation" or  "Other"
 
         Document: "{all_text}"
 
